@@ -8,7 +8,7 @@ any \*nix system.
 To compile and install run:
 
 ```
-$ git clone https://github.com/kimholviala/gophernicus.git
+$ git clone https://github.com/gophernicus/gophernicus.git
 $ cd gophernicus
 $ make
 $ sudo make install
@@ -96,8 +96,8 @@ make your access lists.
 
 ## Running with traditional inetd superserver
 
-If you want to run Gophernicus under the traditional Unix inetd, the 
-below line should be added to your `/etc/inetd.conf` and the inetd 
+If you want to run Gophernicus under the traditional Unix inetd, the
+below line should be added to your `/etc/inetd.conf` and the inetd
 process restarted.
 
 ```
@@ -160,11 +160,10 @@ If you need to port Gophernicus to a new platform, please take
 a look at gophernicus.h which has a bunch of `HAVE_*` `#defines`.
 Fiddling with those usually makes it possible to compile a working
 server. If you succeed in compiling Gophernicus to a new
-platform please send the patches to 
+platform please send the patches to
 <gophernicus at gophernicus dot org> so we can include them into
 the next release.
 
-<<<<<<< HEAD:INSTALL
 Supported Platforms
 ===================
 
@@ -179,4 +178,3 @@ Supported Platforms
 | Gentoo       | up to date                   |
 | Alpine Linux | Edge, 3.9                    |
 =======
->>>>>>> 82a1abebc4bfabc43ef6b27f0627f526984eaf30:INSTALL.md
