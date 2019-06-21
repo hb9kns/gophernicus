@@ -7,6 +7,17 @@ Version 3.0
 Gophernicus is a modern full-featured (and hopefully) secure gopher
 daemon. It is licensed under the BSD license.
 
+## Support/Contact
+
+Developers can be reached at <gophernicus AT gophernicus DOT org>.
+
+Our IRC channel is on irc.freenode.net #gophernicus.
+
+You most likely want to subscribe to the gophernicus mailing list at
+https://lists.tildeverse.org/postorius/lists/gophernicus.lists.tildeverse.org/,
+especially if you maintain a server. This is where all important announcements
+are made.
+
 ## Command line options
 
     -h hostname   Change server hostname (FQDN)      [$HOSTNAME]
@@ -281,7 +292,7 @@ Example:
     
     ; Enable TCP wrappers
     libwrap = yes
-    service = in.gophernicus-tls
+    service = gophernicus-tls
     
     ; Gopher over TLS service
     [gophernicus]
