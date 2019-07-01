@@ -8,12 +8,12 @@
 NAME        = gophernicus
 PACKAGE     = $(NAME)
 BINARY      = $(NAME)
-VERSION     = 3.0 
+VERSION     = 3.0
 CODENAME    = Dungeon Edition
-AUTHOR      = h9bnks and fosslinux
+AUTHOR      = hb9kns and fosslinux
 EMAIL       = gophernicus@gophernicus.org
 STARTED     = 2009
-DEVELOPMENT = 1
+DEVELOPMENT = yes
 
 SOURCES = $(NAME).c file.c menu.c string.c platform.c session.c options.c
 HEADERS = functions.h files.h
@@ -133,7 +133,7 @@ clean-shm:
 # Install targets
 #
 install: clean-shm
-	@if [ ${DEVELOPMENT} -ne 0 ] ; then \
+	@if [ "${DEVELOPMENT}" != "" ] ; then \
 		printf "This is the development version, here be fiery dragons, are you sure you want to continue?\\n" ;\
 		printf "Press ctrl-c to exit now, or enter if you are sure you want to continue.\\n" ;\
 		read DEV_WARNING ; fi
