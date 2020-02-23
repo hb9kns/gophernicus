@@ -76,8 +76,8 @@ src/functions.h:
 		sed -e "s/ =.*$$//" -e "s/ *$$/;/" >> $@
 	@echo
 
-src/filetypes.h: src/filetypes.conf
-	sh src/filetypes.sh < src/filetypes.conf > $@
+src/filetypes.h: src/filetypes.conf src/filetypes.awk
+	awk -f src/filetypes.awk < src/filetypes.conf > $@
 
 src/bin2c: src/bin2c.c
 	$(CC) src/bin2c.c -o $@
