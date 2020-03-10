@@ -6,9 +6,9 @@ BEGIN {
 /^[^#]/ {
     printf "\t"
     for (i = 2; i <= NF; ++i) {
-	printf "\"%s\", \"%s\", ", $i, $1
+	printf "\"%s\",\"%s\", ", $i, $1
     }
-    printf " \\\n"
+    printf "\\\n"
 }
 END {
     printf "\tNULL, NULL\n"
