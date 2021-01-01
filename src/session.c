@@ -34,7 +34,7 @@
  * Locate shared memory session ID
  */
 #ifdef HAVE_SHMEM
-int get_shm_session_id(state *st, shm_state *shm)
+static int get_shm_session_id(state *st, shm_state *shm)
 {
 	time_t now;
 	int i;
@@ -143,8 +143,8 @@ void update_shm_session(state *st, shm_state *shm)
 			shm->session[i].hits / st->session_max_hits);
 
 		/* Throttle user */
-		syslog(LOG_INFO, "throttling user from %s for %i seconds",
-			st->req_remote_addr, delay);
+		log_info("throttling user from %s for %i seconds",
+		         st->req_remote_addr, delay);
 		sleep(delay);
 	}
 }

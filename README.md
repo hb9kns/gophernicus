@@ -1,9 +1,7 @@
 # Gophernicus
 
-Latest stable release: Version 3.0.1
-
-NOTE: The master branch is rolling Development! DO NOT USE unless you want fiery dragons!
-(you probably want to `git checkout 3.0.1`)
+This release: Version DEVEL
+NOTE: The master branch is rolling Development! DO NOT USE unless you want fiery dragons! (you probably want to `git checkout 3.0.1`)
 
 *Copyright (c) 2009-2018 Kim Holviala*
 
@@ -38,7 +36,7 @@ are made.
     -u userdir    Change users personal gopherspace  [public_gopher]
     -l logfile    Log to Apache-compatible combined format logfile
 
-    -w width      Change default page width          [76]
+    -w width      Change default page width          [67]
     -o charset    Change default output charset      [UTF-8]
 
     -s seconds    Session timeout in seconds         [1800]

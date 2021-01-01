@@ -68,7 +68,7 @@ void add_ftype_mapping(state *st, char *suffix)
 /*
  * Add one selector rewrite mapping to the array
  */
-void add_rewrite_mapping(state *st, char *match)
+static void add_rewrite_mapping(state *st, char *match)
 {
 	char *replace;
 
@@ -157,6 +157,7 @@ void parse_args(state *st, int argc, char *argv[])
 				if (*optarg == 'p') { st->opt_proxy = FALSE; break; }
 				if (*optarg == 'x') { st->opt_exec = FALSE; break; }
 				if (*optarg == 'u') { st->opt_personal_spaces = FALSE; break; }
+				if (*optarg == 'H') { st->opt_http_requests = FALSE; break; }
 				break;
 
 			case 'd': st->debug = TRUE; break;

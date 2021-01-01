@@ -34,10 +34,11 @@
  * Libwrap needs these defined
  */
 #ifdef HAVE_LIBWRAP
+#include <syslog.h>
+
 int allow_severity = LOG_DEBUG;
 int deny_severity = LOG_ERR;
 #endif
-
 
 /*
  * Print gopher menu line
@@ -110,24 +111,19 @@ void footer(state *st)
 /*
  * Print error message & exit
  */
-void die(state *st, char *message, char *description)
+void die(state *st, const char *message, const char *description)
 {
-	int en = errno;
 	static const char error_gif[] = ERROR_GIF;
 
-	/* Handle NULL description */
-	if (description == NULL) description = strerror(en);
+	log_fatal("error \"%s %s\" for request \"%s\" from %s",
+	          message, description ? description : "",
+	          st->req_selector, st->req_remote_addr);
 
-	/* Log the error */
-	if (st->opt_syslog) {
-		syslog(LOG_ERR, "error \"%s\" for request \"%s\" from %s",
-			description, st->req_selector, st->req_remote_addr);
-	}
 	log_combined(st, HTTP_404);
 
 	/* Handle menu errors */
 	if (st->req_filetype == TYPE_MENU || st->req_filetype == TYPE_QUERY) {
-		printf("3" ERROR_PREFIX "%s\tTITLE\t" DUMMY_HOST CRLF, message);
+		printf("3" ERROR_PREFIX "%s %s\tTITLE\t" DUMMY_HOST CRLF, message, description);
 		footer(st);
 	}
 
@@ -141,17 +137,17 @@ void die(state *st, char *message, char *description)
 		printf("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 Final//EN\">\n"
 			"<HTML>\n<HEAD>\n"
 			"  <META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html;charset=iso-8859-1\">\n"
-			"  <TITLE>" ERROR_PREFIX "%1$s</TITLE>\n"
+			"  <TITLE>" ERROR_PREFIX "%1$s %2$s</TITLE>\n"
 			"</HEAD>\n<BODY>\n"
-			"<STRONG>" ERROR_PREFIX "%1$s</STRONG>\n"
-			"<PRE>\n", message);
+			"<STRONG>" ERROR_PREFIX "%1$s %2$s</STRONG>\n"
+			"<PRE>", message, description);
 		footer(st);
 		printf("</PRE>\n</BODY>\n</HTML>\n");
 	}
 
 	/* Use plain text error for other filetypes */
 	else {
-		printf(ERROR_PREFIX "%s" CRLF, message);
+		printf(ERROR_PREFIX "%s %s" CRLF, message, description);
 		footer(st);
 	}
 
@@ -197,7 +193,7 @@ void log_combined(state *st, int status)
 /*
  * Convert gopher selector to an absolute path
  */
-void selector_to_path(state *st)
+static void selector_to_path(state *st)
 {
 	DIR *dp;
 	struct dirent *dir;
@@ -221,10 +217,8 @@ void selector_to_path(state *st)
 				st->rewrite[i].replace,
 				st->req_selector + strlen(st->rewrite[i].match));
 
-			if (st->debug) {
-				syslog(LOG_INFO, "rewriting selector \"%s\" -> \"%s\"",
-					st->req_selector, buf);
-			}
+			log_debug("rewriting selector \"%s\" -> \"%s\"",
+			          st->req_selector, buf);
 
 			sstrlcpy(st->req_selector, buf);
 		}
@@ -309,7 +303,7 @@ void selector_to_path(state *st)
 /*
  * Get local IP address
  */
-char *get_local_address(void)
+static char *get_local_address(void)
 {
 #ifdef HAVE_IPv4
 	struct sockaddr_in addr;
@@ -350,7 +344,7 @@ char *get_local_address(void)
 /*
  * Get remote peer IP address
  */
-char *get_peer_address(void)
+static char *get_peer_address(void)
 {
 #ifdef HAVE_IPv4
 	struct sockaddr_in addr;
@@ -395,7 +389,7 @@ char *get_peer_address(void)
 /*
  * Initialize state struct to default/empty values
  */
-void init_state(state *st)
+static void init_state(state *st)
 {
 	static const char *filetypes[] = { FILETYPES };
 	char buf[BUFSIZE];
@@ -475,6 +469,7 @@ void init_state(state *st)
 	st->opt_proxy = TRUE;
 	st->opt_exec = TRUE;
 	st->opt_personal_spaces = TRUE;
+	st->opt_http_requests = TRUE;
 	st->debug = FALSE;
 
 	/* Load default suffix -> filetype mappings */
@@ -529,8 +524,19 @@ int main(int argc, char *argv[])
 	/* Handle command line arguments */
 	parse_args(&st, argc, argv);
 
-	/* Open syslog() */
-	if (st.opt_syslog) openlog(self, LOG_PID, LOG_DAEMON);
+	/* Initalize logging */
+	log_init(st.opt_syslog, st.debug);
+
+	/* Convert relative gopher roots to absolute roots */
+	if (st.server_root[0] != '/') {
+		char cwd[512];
+		getcwd(cwd, sizeof(cwd));
+		if (cwd == NULL) {
+			die(&st, NULL, "unable to get current path");
+		}
+		snprintf(buf, sizeof(buf), "%s/%s", cwd, st.server_root);
+		sstrlcpy(st.server_root, buf);
+	}
 
 #ifdef __OpenBSD__
 	/* unveil(2) support.
@@ -542,8 +548,7 @@ int main(int argc, char *argv[])
 		if (st.extra_unveil_paths != NULL) {
 			die(&st, NULL, "-U and executable maps cannot co-exist");
 		}
-		if (st.debug)
-			syslog(LOG_INFO, "executable gophermaps are enabled, no unveil(2)");
+		log_debug("executable gophermaps are enabled, no unveil(2)");
 	} else {
 		if (unveil(st.server_root, "r") == -1)
 			die(&st, NULL, "unveil");
@@ -555,8 +560,7 @@ int main(int argc, char *argv[])
 		 * to unveil it anyway.
 		 */
 		if (st.opt_personal_spaces) {
-			if (st.debug)
-				syslog(LOG_INFO, "unveiling /etc/pwd.db");
+			log_debug("unveiling /etc/pwd.db");
 			if (unveil("/etc/pwd.db", "r") == -1)
 				die(&st, NULL, "unveil");
 		}
@@ -568,8 +572,7 @@ int main(int argc, char *argv[])
 			if (*extra_unveil == '\0')
 				continue; /* empty path */
 
-			if (st.debug)
-				syslog(LOG_INFO, "unveiling extra path: %s\n", extra_unveil);
+			log_debug("unveiling extra path: %s\n", extra_unveil);
 			if (unveil(extra_unveil, "r") == -1)
 				die(&st, NULL, "unveil");
 		}
@@ -581,8 +584,7 @@ int main(int argc, char *argv[])
 	/* pledge(2) support */
 	if (st.opt_shm) {
 		/* pledge(2) never allows shared memory */
-		if (st.debug)
-			syslog(LOG_INFO, "shared-memory enabled, can't pledge(2)");
+		log_debug("shared-memory enabled, can't pledge(2)");
 	} else {
 		strlcpy(pledges,
 				"stdio rpath inet sendfd recvfd proc",
@@ -591,21 +593,13 @@ int main(int argc, char *argv[])
 		/* Executable maps shell-out using popen(3) */
 		if (st.opt_exec) {
 			strlcat(pledges, " exec", sizeof(pledges));
-			if (st.debug) {
-				syslog(LOG_INFO,
-					   "executable gophermaps enabled, "
-					   "adding 'exec' to pledge(2)");
-			}
+			log_debug("executable gophermaps enabled, adding `exec' to pledge(2)");
 		}
 
 		/* Personal spaces require getpwnam(3) and getpwent(3) */
 		if (st.opt_personal_spaces) {
 			strlcat(pledges, " getpw", sizeof(pledges));
-			if (st.debug) {
-				syslog(LOG_INFO,
-					   "personal gopherspaces enabled, "
-					   "adding 'getpw' to pledge(2)");
-			}
+			log_debug("personal gopherspaces enabled, adding `getpw' to pledge(2)");
 		}
 
 		if (pledge(pledges, NULL) == -1)
@@ -679,12 +673,12 @@ get_selector:
 	/* Remove trailing CRLF */
 	chomp(selector);
 
-	if (st.debug) syslog(LOG_INFO, "client sent us \"%s\"", selector);
+	log_debug("client sent \"%s\"", selector);
 
 	/* Handle HAproxy/Stunnel proxy protocol v1 */
 #ifdef ENABLE_HAPROXY1
 	if (sstrncmp(selector, "PROXY TCP") == MATCH && st.opt_proxy) {
-		if (st.debug) syslog(LOG_INFO, "got proxy protocol header \"%s\"", selector);
+		log_debug("got proxy protocol header \"%s\"", selector);
 
 		sscanf(selector, "PROXY TCP%d %s %s %d %d",
 			&dummy, remote, local, &dummy, &st.server_port);
@@ -715,20 +709,21 @@ get_selector:
 		printf("+VIEWS:" CRLF " application/gopher+-menu: <512b>" CRLF);
 		printf("." CRLF);
 
-		if (st.debug) syslog(LOG_INFO, "got a request for gopher+ root menu");
+		log_debug("got a request for gopher+ root menu");
 		return OK;
 	}
 
 	/* Convert HTTP request to gopher (respond using headerless HTTP/0.9) */
-	if (sstrncmp(selector, "GET ") == MATCH ||
-		sstrncmp(selector, "POST ") == MATCH ) {
+	if (st.opt_http_requests && (
+		sstrncmp(selector, "GET ") == MATCH ||
+		sstrncmp(selector, "POST ") == MATCH)) {
 
 		if ((c = strchr(selector, ' '))) sstrlcpy(selector, c + 1);
 		if ((c = strchr(selector, ' '))) *c = '\0';
 
 		st.req_protocol = PROTO_HTTP;
 
-		if (st.debug) syslog(LOG_INFO, "got HTTP request for \"%s\"", selector);
+		log_debug("got HTTP request for \"%s\"", selector);
 	}
 
 	/* Save default server_host & fetch session data (including new server_host) */
@@ -798,7 +793,7 @@ get_selector:
 
 	/* Convert seletor to path & stat() */
 	selector_to_path(&st);
-	if (st.debug) syslog(LOG_INFO, "path to resource is \"%s\"", st.req_realpath);
+	log_debug("path to resource is \"%s\"", st.req_realpath);
 
 	if (stat(st.req_realpath, &file) == ERROR) {
 
@@ -856,15 +851,13 @@ get_selector:
 #endif
 
 	/* Log the request */
-	if (st.opt_syslog) {
-		syslog(LOG_INFO, "request for \"gopher%s://%s:%i/%c%s\" from %s",
-			(st.server_port == st.server_tls_port ? "s" : ""),
-			st.server_host,
-			st.server_port,
-			st.req_filetype,
-			st.req_selector,
-			st.req_remote_addr);
-	}
+	log_info("request for \"gopher%s://%s:%i/%c%s\" from %s",
+	         st.server_port == st.server_tls_port ? "s" : "",
+	         st.server_host,
+	         st.server_port,
+	         st.req_filetype,
+	         st.req_selector,
+	         st.req_remote_addr);
 
 	/* Check file type & act accordingly */
 	switch (file.st_mode & S_IFMT) {

@@ -9,12 +9,22 @@ git:
 os:
   - linux
   - osx
-  
+
 compiler:
   - clang
   - gcc
 
+addons:
+  apt:
+    packages:
+    - build-essential
+    - fakeroot
+    - libwrap0-dev
+    - debhelper
+
 script:
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then ./configure --listener=systemd,inetd,xinetd --hostname=travis; fi
+  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then ./configure --listener=mac --hostname=travis; fi
   - make
   - sudo make install
   - .travis/test.sh

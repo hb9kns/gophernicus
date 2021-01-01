@@ -1,5 +1,5 @@
 /*
- * Gophernicus 
+ * Gophernicus
  *
  * Copyright (c) 2009-2018 Kim Holviala <kimholviala@fastmail.com>
  * Copyright (c) 2019 Gophernicus Developers <gophernicus@gophernicus.org>
@@ -33,7 +33,7 @@
 /*
  * Alphabetic folders first sort for sortdir()
  */
-int foldersort(const void *a, const void *b)
+static int foldersort(const void *a, const void *b)
 {
 	mode_t amode;
 	mode_t bmode;
@@ -49,9 +49,19 @@ int foldersort(const void *a, const void *b)
 
 
 /*
+ * Date sort for userlist()
+ */
+int datesort(const void *a, const void *b)
+{
+	if (((user_date *)a)->mtime > ((user_date *)b)->mtime) return -1;
+	else return 1;
+}
+
+
+/*
  * Scan, stat and sort a directory folders first (scandir replacement)
  */
-int sortdir(char *path, sdirent *list, int max)
+static int sortdir(char *path, sdirent *list, int max)
 {
 	DIR *dp;
 	struct dirent *d;
@@ -94,11 +104,12 @@ int sortdir(char *path, sdirent *list, int max)
  * Print a list of users with ~/public_gopher
  */
 #ifdef HAVE_PASSWD
-void userlist(state *st)
+static void userlist(state *st)
 {
 	struct passwd *pwd;
 	struct stat dir;
 	char buf[BUFSIZE];
+	user_date users[MAX_USERS];
 	struct tm *ltime;
 	char timestr[20];
 	int width;
@@ -108,6 +119,7 @@ void userlist(state *st)
 
 	/* Loop through all users */
 	setpwent();
+	int i = 0;
 	while ((pwd = getpwent())) {
 
 		/* Skip too small uids */
@@ -120,19 +132,37 @@ void userlist(state *st)
 		if (dir.st_uid != pwd->pw_uid) continue;
 
 		/* Found one */
+		strcpy(users[i].user, pwd->pw_name);
+		users[i].mtime = dir.st_mtime;
+		i++;
+	}
+
+	/* Sort by date */
+	int true_length = 0;
+	while((users[true_length].user[0] != '\0') && (true_length < MAX_USERS)) true_length++;
+	qsort((void*)users, true_length, sizeof(users[0]), datesort);
+
+	/* Loop over the found users */
+	for(
+			i = 0;
+			((i < MAX_USERS) && (users[i].user[0] != '\0'));
+			i++)
+	{
+		/* Format the user string */
 		snprintf(buf, sizeof(buf), USERDIR_FORMAT);
 
+		/* Output */
 		if (st->opt_date) {
-			ltime = localtime(&dir.st_mtime);
+			ltime = localtime(&users[i].mtime);
 			strftime(timestr, sizeof(timestr), DATE_FORMAT, ltime);
 
-			printf("1%-*.*s   %s		-  \t/~%s/\t%s\t%i" CRLF,
-				width, width, buf, timestr, pwd->pw_name,
-				st->server_host, st->server_port);
+			printf("1%-*.*s   %s        -  \t/~%s/\t%s\t%i" CRLF,
+			    width, width, buf, timestr, users[i].user,
+			    st->server_host, st->server_port);
 		}
 		else {
 			printf("1%.*s\t/~%s/\t%s\t%i" CRLF, st->out_width, buf,
-				pwd->pw_name, st->server_host_default, st->server_port);
+			    users[i].user, st->server_host_default, st->server_port);
 		}
 	}
 
@@ -144,7 +174,7 @@ void userlist(state *st)
 /*
  * Print a list of available virtual hosts
  */
-void vhostlist(state *st)
+static void vhostlist(state *st)
 {
 	sdirent dir[MAX_SDIRENT];
 	struct tm *ltime;
@@ -268,7 +298,7 @@ char gopher_filetype(state *st, char *file, char magic)
 /*
  * Handle gophermaps
  */
-int gophermap(state *st, char *mapfile, int depth)
+static int gophermap(state *st, char *mapfile, int depth)
 {
 	FILE *fp;
 	struct stat file;
@@ -283,6 +313,7 @@ int gophermap(state *st, char *mapfile, int depth)
 	char type;
 	int port;
 	int exe;
+	int return_val = QUIT;
 
 	/* Prevent include loops */
 	if (depth > 4) return OK;
@@ -308,16 +339,10 @@ int gophermap(state *st, char *mapfile, int depth)
 		exe = TRUE;
 	}
 
-	/* Debug output */
-	if (st->debug) {
-		if (exe) {
-			if (st->opt_exec)
-			 syslog(LOG_INFO, "parsing executable gophermap \"%s\"", mapfile);
-			else
-			 syslog(LOG_INFO, "parsing executable gophermap \"%s\" forbidden by -nx", mapfile);
-		}
-		else syslog(LOG_INFO, "parsing static gophermap \"%s\"", mapfile);
-	}
+	log_debug("parsing %s gophermap \"%s\"%s",
+	          exe ? "executable" : "static",
+	          mapfile,
+	          exe && !st->opt_exec ? ": forbidden by `-nx'" : "");
 
 	/* Try to execute or open the mapfile */
 	if (exe & st->opt_exec) {
@@ -343,8 +368,13 @@ int gophermap(state *st, char *mapfile, int depth)
 		if (type == '#') continue;
 
 		/* Stop handling gophermap? */
-		if (type == '*') return OK;
-		if (type == '.') return QUIT;
+		if (type == '*') {
+			return_val = OK;
+			goto CLOSE_FP;
+		}
+		if (type == '.')
+			goto CLOSE_FP;
+
 
 		/* Print a list of users with public_gopher */
 		if (type == '~' && st->opt_personal_spaces) {
@@ -435,14 +465,14 @@ int gophermap(state *st, char *mapfile, int depth)
 		}
 	}
 
-	/* Clean up & return */
+CLOSE_FP:
 #ifdef HAVE_POPEN
 	if (exe & st->opt_exec) pclose(fp);
 	else
 #endif
 		fclose(fp);
 
-	return QUIT;
+	return return_val;
 }
 
 
@@ -623,7 +653,7 @@ void gopher_menu(state *st)
 				n = width - strcut(displayname, width);
 				strrepeat(buf, ' ', n);
 
-				printf("1%s%s   %s		-  \t%s%s/\t%s\t%i" CRLF,
+				printf("1%s%s   %s   --------\t%s%s/\t%s\t%i" CRLF,
 					displayname,
 					buf,
 					timestr,
